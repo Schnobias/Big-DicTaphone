@@ -9,8 +9,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.delay
 
 /**
  * Service for interacting with Google's Gemini Flash API for AI summarization
@@ -18,9 +20,9 @@ import java.util.concurrent.TimeUnit
 class GeminiService {
     
     private val client = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(300, TimeUnit.SECONDS)  // 5 min for long audio
+        .readTimeout(300, TimeUnit.SECONDS)
+        .writeTimeout(300, TimeUnit.SECONDS)
         .build()
     
     private val json = Json { 
@@ -29,6 +31,8 @@ class GeminiService {
     }
     
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    private val uploadUrl = "https://generativelanguage.googleapis.com/upload/v1beta/files"
+    private val fileUrl = "https://generativelanguage.googleapis.com/v1beta/files"
     
     /**
      * Generate a meeting summary from a transcription
@@ -67,16 +71,8 @@ class GeminiService {
             throw GeminiException("Audio file not found: ${audioFile.name}")
         }
         
-        // Read audio file and encode to base64
-        val audioBytes = audioFile.readBytes()
-        
         // Check file size (Gemini has limits)
-        val fileSizeMB = audioBytes.size / (1024.0 * 1024.0)
-        if (fileSizeMB > 20) {
-            throw GeminiException("Audio file too large (${String.format("%.1f", fileSizeMB)}MB). Maximum is 20MB.")
-        }
-        
-        val audioBase64 = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
+        val fileSizeMB = audioFile.length() / (1024.0 * 1024.0)
         
         // Determine MIME type based on file extension
         val mimeType = when {
@@ -86,6 +82,31 @@ class GeminiService {
             audioFile.name.endsWith(".ogg", ignoreCase = true) -> "audio/ogg"
             audioFile.name.endsWith(".aac", ignoreCase = true) -> "audio/aac"
             else -> "audio/mp4" // Default for Android recordings
+        }
+
+        // Prepare file part - either inline or uploaded
+        // Use large file upload for files > 10MB to avoid OOM when Base64 encoding
+        val filePartJson = if (fileSizeMB > 10) {
+            val fileUri = uploadLargeFile(audioFile, mimeType, audioFile.length(), apiKey)
+            """
+            {
+                "file_data": {
+                    "mime_type": "$mimeType",
+                    "file_uri": "$fileUri"
+                }
+            }
+            """
+        } else {
+            val audioBytes = audioFile.readBytes()
+            val audioBase64 = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
+            """
+            {
+                "inline_data": {
+                    "mime_type": "$mimeType",
+                    "data": "$audioBase64"
+                }
+            }
+            """
         }
         
         val languageInstruction = when (language) {
@@ -118,17 +139,12 @@ class GeminiService {
                 "contents": [{
                     "parts": [
                         {"text": "$prompt"},
-                        {
-                            "inline_data": {
-                                "mime_type": "$mimeType",
-                                "data": "$audioBase64"
-                            }
-                        }
+                        $filePartJson
                     ]
                 }],
                 "generationConfig": {
                     "temperature": 0.3,
-                    "maxOutputTokens": 4096
+                    "maxOutputTokens": 65536
                 }
             }
         """.trimIndent()
@@ -283,10 +299,131 @@ class GeminiService {
             val parsed = json.decodeFromString<TranscriptionAndSummary>(cleanedText)
             Pair(parsed.transcription ?: "", parsed.toMeetingSummary())
         } catch (e: Exception) {
-            throw GeminiException("Failed to parse response: ${e.message}")
+            // Try to fix common JSON issues (unescaped newlines in string values)
+            try {
+                val fixedText = fixJsonNewlines(cleanedText)
+                val parsed = json.decodeFromString<TranscriptionAndSummary>(fixedText)
+                Pair(parsed.transcription ?: "", parsed.toMeetingSummary())
+            } catch (e2: Exception) {
+                // Include a snippet of the problematic JSON for debugging
+                val snippet = cleanedText.take(100).replace("\n", "\\n")
+                throw GeminiException("Failed to parse response: ${e.message}\nJSON input: .....$snippet.....")
+            }
         }
     }
+    
+    /**
+     * Fix common JSON formatting issues from Gemini responses.
+     * Gemini sometimes returns unescaped newlines inside string values.
+     */
+    private fun fixJsonNewlines(jsonText: String): String {
+        val result = StringBuilder()
+        var inString = false
+        var escaped = false
+        
+        for (i in jsonText.indices) {
+            val c = jsonText[i]
+            
+            when {
+                escaped -> {
+                    result.append(c)
+                    escaped = false
+                }
+                c == '\\' && inString -> {
+                    result.append(c)
+                    escaped = true
+                }
+                c == '"' -> {
+                    inString = !inString
+                    result.append(c)
+                }
+                c == '\n' && inString -> {
+                    // Unescaped newline inside string - escape it
+                    result.append("\\n")
+                }
+                c == '\r' && inString -> {
+                    // Skip carriage returns inside strings
+                }
+                else -> result.append(c)
+            }
+        }
+        
+        return result.toString()
+    }
+
+    /**
+     * Upload a large file to Gemini API and wait for processing
+     */
+    private suspend fun uploadLargeFile(file: File, mimeType: String, fileSize: Long, apiKey: String): String {
+        // 1. Upload the file
+        val requestBody = file.asRequestBody(mimeType.toMediaType())
+        
+        val request = Request.Builder()
+            .url("$uploadUrl?key=$apiKey")
+            .header("X-Goog-Upload-Protocol", "raw")
+            .header("X-Goog-Upload-Command", "start, upload, finalize")
+            .header("X-Goog-Upload-Header-Content-Length", fileSize.toString())
+            .header("X-Goog-Upload-Header-Content-Type", mimeType)
+            .post(requestBody)
+            .build()
+            
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw GeminiException("Failed to upload file: ${response.message}")
+        }
+        
+        val responseBody = response.body?.string() ?: throw GeminiException("Empty upload response")
+        val uploadResponse = json.decodeFromString<FileUploadResponse>(responseBody)
+        val fileUri = uploadResponse.file.uri
+        val fileName = uploadResponse.file.name // This is the resource name (files/...)
+        
+        // 2. Wait for processing to complete
+        waitForProcessing(fileName, apiKey)
+        
+        return fileUri
+    }
+    
+    /**
+     * Poll the file status until it's ACTIVE
+     */
+    private suspend fun waitForProcessing(fileName: String, apiKey: String) {
+        var attempts = 0
+        while (attempts < 60) { // Wait up to 2 minutes (2s * 60)
+            val request = Request.Builder()
+                .url("https://generativelanguage.googleapis.com/v1beta/$fileName?key=$apiKey")
+                .get()
+                .build()
+                
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string()?.take(200) ?: "no details"
+                throw GeminiException("Failed to check file status: HTTP ${response.code} - $errorBody")
+            }
+            
+            val body = response.body?.string() ?: throw GeminiException("Empty status response")
+            val status = json.decodeFromString<FileStatusResponse>(body)
+            
+            when (status.state) {
+                "ACTIVE" -> return
+                "FAILED" -> throw GeminiException("File processing failed")
+                else -> {
+                    delay(2000)
+                    attempts++
+                }
+            }
+        }
+        throw GeminiException("File processing timed out")
+    }
 }
+
+@kotlinx.serialization.Serializable
+private data class FileUploadResponse(val file: FileInfo)
+
+@kotlinx.serialization.Serializable
+private data class FileInfo(val name: String, val uri: String)
+
+@kotlinx.serialization.Serializable
+private data class FileStatusResponse(val name: String, val state: String)
 
 @kotlinx.serialization.Serializable
 private data class TranscriptionAndSummary(

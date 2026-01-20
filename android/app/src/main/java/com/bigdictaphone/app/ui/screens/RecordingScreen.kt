@@ -37,6 +37,8 @@ fun RecordingScreen(viewModel: RecordingViewModel) {
     val isPaused by viewModel.audioRecorder.isPaused.collectAsState()
     val recordingTime by viewModel.audioRecorder.recordingTime.collectAsState()
     val audioLevel by viewModel.audioRecorder.audioLevel.collectAsState()
+    val audioLevelLeft by viewModel.audioRecorder.audioLevelLeft.collectAsState()
+    val audioLevelRight by viewModel.audioRecorder.audioLevelRight.collectAsState()
     val selectedLanguage by viewModel.selectedLanguage.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     
@@ -81,9 +83,10 @@ fun RecordingScreen(viewModel: RecordingViewModel) {
                 isRecording = isRecording
             )
             
-            // Audio level visualization
-            AudioLevelVisualization(
-                level = audioLevel,
+            // Stereo audio level visualization (L/R channels)
+            StereoAudioLevelVisualization(
+                levelLeft = audioLevelLeft,
+                levelRight = audioLevelRight,
                 isRecording = isRecording && !isPaused
             )
             
@@ -208,6 +211,84 @@ private fun AudioLevelVisualization(level: Float, isRecording: Boolean) {
                 modifier = Modifier
                     .width(8.dp)
                     .height(height.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(color)
+            )
+        }
+    }
+}
+
+@Composable
+private fun StereoAudioLevelVisualization(
+    levelLeft: Float,
+    levelRight: Float,
+    isRecording: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Left channel
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "L",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.width(16.dp)
+            )
+            AudioLevelBar(level = levelLeft, isRecording = isRecording)
+        }
+        
+        // Right channel
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "R",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.width(16.dp)
+            )
+            AudioLevelBar(level = levelRight, isRecording = isRecording)
+        }
+    }
+}
+
+@Composable
+private fun AudioLevelBar(level: Float, isRecording: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(24.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(30) { index ->
+            val threshold = index / 30f
+            val isActive = isRecording && level > threshold
+            
+            val color by animateColorAsState(
+                targetValue = when {
+                    !isActive -> MaterialTheme.colorScheme.surfaceVariant
+                    index < 21 -> Color(0xFF4CAF50) // Green (70%)
+                    index < 26 -> Color(0xFFFFC107) // Yellow (17%)
+                    else -> Color(0xFFF44336) // Red (13%)
+                },
+                label = "barColor"
+            )
+            
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(if (isActive) 20.dp else 12.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(color)
             )

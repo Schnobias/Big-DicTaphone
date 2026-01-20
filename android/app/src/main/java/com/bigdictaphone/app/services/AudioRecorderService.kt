@@ -30,6 +30,13 @@ class AudioRecorderService(private val context: Context) {
     private val _audioLevel = MutableStateFlow(0f)
     val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
     
+    // Stereo audio levels (simulated from mono with natural variation)
+    private val _audioLevelLeft = MutableStateFlow(0f)
+    val audioLevelLeft: StateFlow<Float> = _audioLevelLeft.asStateFlow()
+    
+    private val _audioLevelRight = MutableStateFlow(0f)
+    val audioLevelRight: StateFlow<Float> = _audioLevelRight.asStateFlow()
+    
     /**
      * Get the recordings directory
      */
@@ -116,6 +123,8 @@ class AudioRecorderService(private val context: Context) {
         _isRecording.value = false
         _isPaused.value = false
         _audioLevel.value = 0f
+        _audioLevelLeft.value = 0f
+        _audioLevelRight.value = 0f
         
         return duration
     }
@@ -140,6 +149,8 @@ class AudioRecorderService(private val context: Context) {
         _isPaused.value = false
         _recordingTime.value = 0
         _audioLevel.value = 0f
+        _audioLevelLeft.value = 0f
+        _audioLevelRight.value = 0f
     }
     
     /**
@@ -155,7 +166,13 @@ class AudioRecorderService(private val context: Context) {
             } catch (e: Exception) {
                 0
             }
-            _audioLevel.value = (maxAmplitude.toFloat() / 32767f).coerceIn(0f, 1f)
+            val baseLevel = (maxAmplitude.toFloat() / 32767f).coerceIn(0f, 1f)
+            _audioLevel.value = baseLevel
+            
+            // Simulate stereo with natural variation (microphones pick up slightly different levels)
+            val variation = kotlin.random.Random.nextFloat() * 0.2f - 0.1f // -10% to +10%
+            _audioLevelLeft.value = (baseLevel * (1f + variation)).coerceIn(0f, 1f)
+            _audioLevelRight.value = (baseLevel * (1f - variation)).coerceIn(0f, 1f)
         }
     }
     

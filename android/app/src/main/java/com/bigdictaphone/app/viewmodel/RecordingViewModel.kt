@@ -81,6 +81,9 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
             val fileName = "recording_${System.currentTimeMillis()}.m4a"
             audioRecorder.startRecording(fileName)
             
+            // Start foreground service to keep recording alive during screen lock
+            RecordingForegroundService.start(context)
+            
             _currentRecording.value = Recording(
                 id = UUID.randomUUID().toString(),
                 title = generateDefaultTitle(),
@@ -115,6 +118,9 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         recordingTimer?.cancel()
         val duration = audioRecorder.stopRecording()
         
+        // Stop foreground service
+        RecordingForegroundService.stop(context)
+        
         return _currentRecording.value?.copy(duration = duration)?.also {
             _currentRecording.value = it
         }
@@ -124,6 +130,9 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         recordingTimer?.cancel()
         audioRecorder.cancelRecording()
         _currentRecording.value = null
+        
+        // Stop foreground service
+        RecordingForegroundService.stop(context)
     }
     
     fun saveRecording(title: String? = null) {
@@ -418,7 +427,22 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         if (file.exists()) {
             try {
                 val content = file.readText()
-                _recordings.value = json.decodeFromString<List<Recording>>(content)
+                val loadedList = json.decodeFromString<List<Recording>>(content)
+                
+                // Check for stuck states and reset them
+                var changesMade = false
+                _recordings.value = loadedList.map { recording ->
+                    if (recording.status.isProcessing) {
+                        changesMade = true
+                        recording.copy(status = ProcessingStatus.FAILED)
+                    } else {
+                        recording
+                    }
+                }
+                
+                if (changesMade) {
+                    saveRecordingsToFile()
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 _recordings.value = emptyList()
