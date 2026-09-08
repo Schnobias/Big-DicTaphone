@@ -1,0 +1,74 @@
+name: Build and review checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Android build components
+        run: sdkmanager "platforms;android-36" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Build APKs, unit tests and lint
+        working-directory: android
+        run: bash gradlew assembleDebug assembleDebugAndroidTest testDebugUnitTest lintDebug --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-apks-and-reports
+          path: |
+            android/app/build/outputs/apk/
+            android/app/build/reports/
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -d /Applications/Xcode_16.4.app ]]; then
+            sudo xcode-select -s /Applications/Xcode_16.4.app
+          elif [[ -d /Applications/Xcode_16.3.app ]]; then
+            sudo xcode-select -s /Applications/Xcode_16.3.app
+          else
+            echo "No supported Xcode 16 installation found" >&2
+            ls -1 /Applications/Xcode*.app >&2 || true
+            exit 1
+          fi
+          xcodebuild -version
+      - name: Prepare iOS logs
+        run: mkdir -p .logs
+      - name: Resolve Swift packages
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild -resolvePackageDependencies -project Big-DicTaphone.xcodeproj -scheme Big-DicTaphone 2>&1 | tee .logs/resolve-packages.log
+      - name: Build iOS simulator app and tests
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild -project Big-DicTaphone.xcodeproj -scheme Big-DicTaphone -sdk iphonesimulator -configuration Debug -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build-for-testing 2>&1 | tee .logs/build-for-testing.log
+      - name: Run iOS simulator tests
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild -project Big-DicTaphone.xcodeproj -scheme Big-DicTaphone -sdk iphonesimulator -configuration Debug -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO test-without-building -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' 2>&1 | tee .logs/test-without-building.log
+      - name: Upload iOS build, test and package logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-test-logs-and-resolved-package
+          path: |
+            .logs/
+            build/ios/Logs/
+            Big-DicTaphone.xcodeproj/project.xcworkspace/xcshareddata/Package.resolved

@@ -109,13 +109,14 @@ enum ProcessingStatus: String, Codable {
     case summarizing = "Summarizing..."
     case complete = "Complete"
     case failed = "Failed"
+    case mediaMissing = "Audio Missing"
     
     var color: String {
         switch self {
         case .recorded: return "gray"
         case .transcribing, .summarizing: return "orange"
         case .complete: return "green"
-        case .failed: return "red"
+        case .failed, .mediaMissing: return "red"
         }
     }
     

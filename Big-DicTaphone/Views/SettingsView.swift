@@ -9,6 +9,7 @@ struct SettingsView: View {
     
     @State private var apiKey = ""
     @State private var showingAPIKey = false
+    @State private var credentialError: String?
     @State private var showingClearDataAlert = false
     @State private var isAddingStakeholder = false
     @State private var editingStakeholder: Stakeholder?
@@ -16,6 +17,13 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Toggle("Transcribe only on this iPhone", isOn: $recordingManager.localOnly)
+                } header: {
+                    Text("Transcription privacy")
+                } footer: {
+                    Text("On-device mode requires an installed Apple speech language and skips Gemini and auto-email. Auto uses the device language. Turn off to allow Apple speech servers and Gemini summaries. Android uses Whisper and supports automatic language detection independently.")
+                }
                 // Personal Settings
                 Section {
                     TextField("Your Email", text: $recordingManager.userEmail)
@@ -126,7 +134,11 @@ struct SettingsView: View {
                     }
                     
                     Button {
-                        GeminiService.saveAPIKey(apiKey)
+                        if !GeminiService.saveAPIKey(apiKey) {
+                            credentialError = "Could not save the API key securely."
+                        } else {
+                            credentialError = nil
+                        }
                     } label: {
                         HStack {
                             Image(systemName: "checkmark.circle")
@@ -134,6 +146,12 @@ struct SettingsView: View {
                         }
                     }
                     .disabled(apiKey.isEmpty)
+
+                    if let credentialError {
+                        Text(credentialError)
+                            .foregroundStyle(.red)
+                            .font(.footnote)
+                    }
                     
                     if GeminiService.hasAPIKey {
                         HStack {

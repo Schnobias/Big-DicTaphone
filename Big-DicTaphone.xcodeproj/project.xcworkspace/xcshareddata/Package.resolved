@@ -1,0 +1,15 @@
+{
+  "originHash" : "Big-DicTaphone-SwiftSMTP-5.1.0",
+  "pins" : [
+    {
+      "identity" : "swift-smtp",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Kitura/Swift-SMTP.git",
+      "state" : {
+        "revision" : "496f779",
+        "version" : "5.1.0"
+      }
+    }
+  ],
+  "version" : 2
+}
