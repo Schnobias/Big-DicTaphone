@@ -70,6 +70,9 @@ class BackgroundLifecycleTest {
             shell("input keyevent KEYCODE_SLEEP")
             Thread.sleep(2_000)
             shell("input keyevent KEYCODE_WAKEUP")
+            assertTrue("capture stopped while the display was asleep", app.audioRecorder.isRecording.value)
+            shell("am start -n com.bigdictaphone.app/.MainActivity")
+            Thread.sleep(500)
             scenario.recreate()
             RecordingForegroundService.stopForReview(context)
             withTimeout(15_000) { app.audioRecorder.isRecording.first { !it } }

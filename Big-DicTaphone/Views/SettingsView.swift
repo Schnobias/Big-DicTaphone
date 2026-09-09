@@ -327,6 +327,7 @@ struct StakeholderEditView: View {
             }
         }
     }
+}
 
 #Preview {
     SettingsView()

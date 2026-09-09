@@ -681,7 +681,8 @@ struct StakeholderEmailCard: View {
                     "Follow up on client feedback",
                     "Discuss hiring needs"
                 ],
-                managementDraft: "The meeting was productive with key decisions made on project priorities."
+                managementDraft: "The meeting was productive with key decisions made on project priorities.",
+                funnyQuote: nil
             ),
             status: .complete
         )))
