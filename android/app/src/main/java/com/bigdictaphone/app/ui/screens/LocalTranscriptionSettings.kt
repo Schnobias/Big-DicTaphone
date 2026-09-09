@@ -56,7 +56,7 @@ fun LocalTranscriptionSettings(viewModel: RecordingViewModel) {
                 Text(if (readiness[model] == com.bigdictaphone.app.services.ModelReadiness.Ready) "Download model again" else "Download model")
             }
         }
-        Text("Downloads use your internet connection (Hugging Face). Transcription runs on the CPU; keep the app open and allow extra time for long recordings.", style = MaterialTheme.typography.bodySmall)
+        Text("Downloads use your internet connection (Hugging Face). Transcription runs on the CPU and continues with the screen locked or while you use another app.", style = MaterialTheme.typography.bodySmall)
     }
     if (confirmCloud) AlertDialog(
         onDismissRequest = { confirmCloud = false },

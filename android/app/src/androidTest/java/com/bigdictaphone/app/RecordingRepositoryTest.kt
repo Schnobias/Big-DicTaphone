@@ -43,8 +43,10 @@ class RecordingRepositoryTest {
     @Test fun concurrentUpdatesDoNotOverwriteEachOtherAndEnqueueIsDeduplicated() = runBlocking {
         repository.saveBlocking(listOf(recording, recording.copy(id = "second", title = "second")))
         listOf(recording.id, "second").map { id -> async { repository.update(id) { it.copy(title = it.title + " updated") } } }.awaitAll()
+        assertEquals("durable updated", repository.find(recording.id)?.title)
+        assertEquals("second updated", repository.find("second")?.title)
         assertTrue(repository.enqueue(recording.id))
-        assertTrue(repository.enqueue(recording.id))
+        assertFalse(repository.enqueue(recording.id))
         assertEquals(JobStatus.QUEUED, repository.find(recording.id)!!.jobStatus)
         assertEquals(2, repository.snapshot().size)
     }

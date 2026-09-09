@@ -34,7 +34,7 @@ struct ToDoListView: View {
                             Text("\(openActionItems.count)")
                                 .font(.title)
                                 .fontWeight(.bold)
-                                .foregroundStyle(openActionItems.isEmpty ? .secondary : .orange)
+                                .foregroundStyle(openActionItems.isEmpty ? Color.secondary : Color.orange)
                             Text("Pending")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -141,7 +141,7 @@ struct ToDoRow: View {
                     if let deadline = item.deadline, !deadline.isEmpty {
                         Label(deadline, systemImage: "calendar")
                             .font(.caption)
-                            .foregroundStyle(item.completed ? .secondary : .green)
+                            .foregroundStyle(item.completed ? Color.secondary : Color.green)
                     }
                 }
             }
