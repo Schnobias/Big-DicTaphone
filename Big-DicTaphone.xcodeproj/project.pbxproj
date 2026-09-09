@@ -190,6 +190,9 @@
 				nl,
 			);
 			mainGroup = GRP001;
+			packageReferences = (
+				PKGREF001 /* Swift-SMTP */,
+			);
 			productRefGroup = GRP007 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";

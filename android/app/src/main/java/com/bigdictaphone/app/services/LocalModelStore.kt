@@ -117,6 +117,7 @@ class LocalModelStore internal constructor(
             replaceAtomically(partial, target)
             model?.let { setReadiness(it, ModelReadiness.Ready) }
         } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
             model?.let { setReadiness(it, if (previousReadiness == ModelReadiness.Ready) ModelReadiness.Ready else verifiedReadiness(it)) }
             throw e
         } finally { partial.delete() }

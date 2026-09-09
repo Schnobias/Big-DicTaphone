@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,6 +20,7 @@ import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import kotlin.io.path.createTempDirectory
 
 class LocalModelStoreTest {
     private fun digest(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
@@ -29,7 +31,7 @@ class LocalModelStoreTest {
     )
 
     @Test fun missingModelIsObservableAndCannotBeUsed() {
-        val directory = createTempDir()
+        val directory = createTempDirectory("model-store").toFile()
         try {
             val store = LocalModelStore(directory, OkHttpClient())
             assertEquals(ModelReadiness.Missing, store.readiness.value[LocalModel.TINY])
@@ -38,7 +40,7 @@ class LocalModelStoreTest {
     }
 
     @Test fun wrongSizePresentModelIsDamaged() = runBlocking {
-        val directory = createTempDir()
+        val directory = createTempDirectory("model-store").toFile()
         try {
             val store = LocalModelStore(directory, OkHttpClient())
             store.file(LocalModel.TINY).writeBytes(ByteArray(32))
@@ -48,7 +50,7 @@ class LocalModelStoreTest {
     }
 
     @Test fun interruptedResponseLeavesNoPartialTarget() = runBlocking {
-        val directory = createTempDir(); val server = MockWebServer()
+        val directory = createTempDirectory("model-store").toFile(); val server = MockWebServer()
         try {
             val content = ByteArray(4096) { it.toByte() }
             val descriptor = ModelDescriptor("test.bin", content.size.toLong(), digest(content))
@@ -63,11 +65,11 @@ class LocalModelStoreTest {
     }
 
     @Test fun cancellationLeavesNoPartialTarget() = runBlocking {
-        val directory = createTempDir(); val server = MockWebServer()
+        val directory = createTempDirectory("model-store").toFile(); val server = MockWebServer()
         try {
             val content = ByteArray(4096) { (it * 3).toByte() }
             val descriptor = ModelDescriptor("test.bin", content.size.toLong(), digest(content))
-            server.enqueue(MockResponse().setBody(okio.Buffer().write(content)).setBodyDelay(10, TimeUnit.SECONDS))
+            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
             server.start()
             val target = File(directory, descriptor.fileName)
             val task = launch(kotlinx.coroutines.Dispatchers.Default) { store(directory, server).downloadDescriptor(descriptor, target) { } }
@@ -82,7 +84,7 @@ class LocalModelStoreTest {
     }
 
     @Test fun digestMismatchPreservesExistingVerifiedTarget() = runBlocking {
-        val directory = createTempDir(); val server = MockWebServer()
+        val directory = createTempDirectory("model-store").toFile(); val server = MockWebServer()
         try {
             val old = ByteArray(4096) { 7 }; val replacement = ByteArray(4096) { 9 }
             val descriptor = ModelDescriptor("test.bin", old.size.toLong(), digest(old))
@@ -97,7 +99,7 @@ class LocalModelStoreTest {
     }
 
     @Test fun successfulReplacementInstallsVerifiedBytes() = runBlocking {
-        val directory = createTempDir(); val server = MockWebServer()
+        val directory = createTempDirectory("model-store").toFile(); val server = MockWebServer()
         try {
             val old = ByteArray(4096) { 7 }; val replacement = ByteArray(4096) { 11 }
             val descriptor = ModelDescriptor("test.bin", replacement.size.toLong(), digest(replacement))
