@@ -74,6 +74,11 @@ struct Recording: Identifiable, Codable {
     }
 }
 
+extension Recording: Hashable {
+    static func == (lhs: Recording, rhs: Recording) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
 /// Supported languages for transcription
 enum RecordingLanguage: String, Codable, CaseIterable, Identifiable {
     case auto = "auto"
