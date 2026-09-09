@@ -3,6 +3,7 @@ package com.bigdictaphone.app
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -57,7 +58,7 @@ class BackgroundLifecycleTest {
         ownedIds += listOf(id, secondId); ownedFiles += listOf(fileName, secondFile)
         app.recordings.insert(Recording(id = id, title = "Lifecycle", audioFileName = fileName, captureStatus = CaptureStatus.ACTIVE))
         app.recordings.insert(Recording(id = secondId, title = "Second", audioFileName = secondFile, captureStatus = CaptureStatus.ACTIVE))
-        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        val scenario = ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         try {
             RecordingForegroundService.startCapture(context, id)
             withTimeout(15_000) { app.audioRecorder.isRecording.first { it } }
@@ -103,7 +104,7 @@ class BackgroundLifecycleTest {
             source.copyTo(target, overwrite = true)
             app.recordings.insert(Recording(id = id, title = "Offline", audioFileName = fileName, transcriptionMode = TranscriptionMode.LOCAL))
             app.recordings.enqueue(id)
-            val scenario = ActivityScenario.launch(MainActivity::class.java)
+            val scenario = ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             try {
                 ProcessingForegroundService.start(context, id)
                 shell("input keyevent KEYCODE_HOME")

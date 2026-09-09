@@ -79,7 +79,6 @@
 			children = (
 				SRC001 /* Big_DicTaphoneApp.swift */,
 				SRC002 /* ContentView.swift */,
-				SRC017 /* ToDoListView.swift */,
 				GRP003 /* Views */,
 				GRP004 /* Models */,
 				GRP005 /* Services */,
@@ -95,6 +94,7 @@
 				SRC004 /* RecordingListView.swift */,
 				SRC005 /* RecordingDetailView.swift */,
 				SRC006 /* SettingsView.swift */,
+				SRC017 /* ToDoListView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
