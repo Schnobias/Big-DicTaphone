@@ -36,7 +36,7 @@ The public-domain JFK fixture from the pinned whisper.cpp source is used for off
 
 The app and instrumentation APK install on the official API 37 `google_apis_ps16k` x86_64 image, and the guest reports Android 17 with a 16,384-byte page size. Functional execution is blocked by a system-image graphics crash in SurfaceFlinger before the test runner can complete. The failing build is `google/sdk_gphone16k_x86_64/emu64xa16k:17/CE2A.260420.019/15611780`; the native assertion is `!rcEnc->featureInfo()->hasReadColorBufferDma` in `mapper.ranchu.so`. The crash reproduces with ANGLE and software graphics, so API 37 installation and page-size compatibility are verified, while API 37 UI behavior is not claimed.
 
-Pixel 11 Pro compatibility is covered statically by Android 17 targeting, ARM64 output, portable CPU inference, and 16 KB native/APK alignment. A physical Pixel 11 Pro is still required to verify microphone routing, lock-screen capture under the handset firmware, recognition speed, thermals, memory use, and battery drain. Follow [PIXEL-11-PRO-TEST-PLAN.md](PIXEL-11-PRO-TEST-PLAN.md) on the handset before production release.
+Pixel 11 Pro compatibility is covered statically by successful Android 17 installation, ARM64 output, portable CPU inference, and 16 KB native/APK alignment. A physical Pixel 11 Pro is still required to verify microphone routing, lock-screen capture under the handset firmware, recognition speed, thermals, memory use, and battery drain. Follow [PIXEL-11-PRO-TEST-PLAN.md](PIXEL-11-PRO-TEST-PLAN.md) on the handset before production release.
 
 ## Remaining release checks
 
