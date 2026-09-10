@@ -1,11 +1,16 @@
 package com.bigdictaphone.app.ui.screens
 
 import android.Manifest
+import android.os.Build
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.bigdictaphone.app.data.TranscriptionMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -37,21 +42,24 @@ fun RecordingScreen(viewModel: RecordingViewModel) {
     val isPaused by viewModel.audioRecorder.isPaused.collectAsState()
     val recordingTime by viewModel.audioRecorder.recordingTime.collectAsState()
     val audioLevel by viewModel.audioRecorder.audioLevel.collectAsState()
-    val audioLevelLeft by viewModel.audioRecorder.audioLevelLeft.collectAsState()
-    val audioLevelRight by viewModel.audioRecorder.audioLevelRight.collectAsState()
     val selectedLanguage by viewModel.selectedLanguage.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
     
+    val mode by viewModel.transcriptionMode.collectAsState(initial = TranscriptionMode.LOCAL)
+    val pending by viewModel.currentRecording.collectAsState()
+    val busy by viewModel.captureBusy.collectAsState()
     var hasPermission by remember { mutableStateOf(false) }
-    var showSaveDialog by remember { mutableStateOf(false) }
-    var recordingTitle by remember { mutableStateOf("") }
-    var stoppedRecording by remember { mutableStateOf<com.bigdictaphone.app.data.Recording?>(null) }
+    var recordingTitle by rememberSaveable { mutableStateOf("") }
+    var permissionMessage by rememberSaveable { mutableStateOf<String?>(null) }
     
     // Permission launcher
     val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasPermission = granted
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        permissionMessage = if (!hasPermission) "Microphone access is needed to record. You can enable it in Android app settings."
+        else if (Build.VERSION.SDK_INT >= 33 && results[Manifest.permission.POST_NOTIFICATIONS] == false)
+            "Recording can continue in the background. Enable notifications in Android settings to use lock-screen controls."
+        else "Ready. Tap the microphone to start recording."
     }
     
     // Check permission on launch
@@ -73,23 +81,24 @@ fun RecordingScreen(viewModel: RecordingViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp),
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceEvenly
         ) {
+            Text(if (mode == TranscriptionMode.LOCAL) "On-device transcription · no upload" else "Gemini cloud · uploads audio on save")
+            permissionMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            Spacer(Modifier.height(16.dp))
             // Timer display
             TimerDisplay(
                 time = recordingTime,
                 isRecording = isRecording
             )
             
-            // Stereo audio level visualization (L/R channels)
-            StereoAudioLevelVisualization(
-                levelLeft = audioLevelLeft,
-                levelRight = audioLevelRight,
-                isRecording = isRecording && !isPaused
-            )
-            
+            AudioLevelBar(level = audioLevel, isRecording = isRecording && !isPaused)
+            Text("Microphone level", style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.height(16.dp))
             // Language selector
             LanguageSelector(
                 selectedLanguage = selectedLanguage,
@@ -103,16 +112,20 @@ fun RecordingScreen(viewModel: RecordingViewModel) {
                 isPaused = isPaused,
                 audioLevel = audioLevel,
                 onClick = {
+                    if (busy) return@RecordButton
+                    hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                     if (!hasPermission) {
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        permissionLauncher.launch(if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS) else arrayOf(Manifest.permission.RECORD_AUDIO))
                         return@RecordButton
                     }
                     
                     if (isRecording) {
-                        stoppedRecording = viewModel.stopRecording()
+                        viewModel.stopRecording()
                         recordingTitle = ""
-                        showSaveDialog = true
                     } else {
+                        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            permissionMessage = "Enable notifications in Android settings for lock-screen pause, resume and save controls."
+                        } else permissionMessage = null
                         viewModel.startRecording()
                     }
                 }
@@ -133,30 +146,18 @@ fun RecordingScreen(viewModel: RecordingViewModel) {
         }
     }
     
-    // Error snackbar
-    errorMessage?.let { error ->
-        LaunchedEffect(error) {
-            // Auto-clear after showing
-            kotlinx.coroutines.delay(3000)
-            viewModel.clearError()
-        }
-    }
-    
     // Save dialog
-    if (showSaveDialog) {
+    if (pending != null && !isRecording) {
         SaveRecordingDialog(
-            recording = stoppedRecording,
+            recording = pending,
             title = recordingTitle,
+            busy = busy,
             onTitleChange = { recordingTitle = it },
             onSave = {
                 viewModel.saveRecording(recordingTitle.takeIf { it.isNotBlank() })
-                showSaveDialog = false
-                stoppedRecording = null
             },
             onDiscard = {
                 viewModel.cancelRecording()
-                showSaveDialog = false
-                stoppedRecording = null
             }
         )
     }
@@ -171,95 +172,6 @@ private fun TimerDisplay(time: Long, isRecording: Boolean) {
         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
         color = if (isRecording) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
     )
-}
-
-@Composable
-private fun AudioLevelVisualization(level: Float, isRecording: Boolean) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(60.dp)
-            .padding(horizontal = 32.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        repeat(20) { index ->
-            val threshold = index / 20f
-            val isActive = isRecording && level > threshold
-            
-            val height by animateFloatAsState(
-                targetValue = if (isActive) {
-                    (10f + (50f * (level - threshold) / (1f - threshold)) * (0.8f + kotlin.random.Random.nextFloat() * 0.4f))
-                } else {
-                    10f
-                },
-                animationSpec = tween(100),
-                label = "barHeight"
-            )
-            
-            val color by animateColorAsState(
-                targetValue = when {
-                    !isActive -> MaterialTheme.colorScheme.surfaceVariant
-                    index < 14 -> Color(0xFF4CAF50) // Green
-                    index < 17 -> Color(0xFFFFC107) // Yellow
-                    else -> Color(0xFFF44336) // Red
-                },
-                label = "barColor"
-            )
-            
-            Box(
-                modifier = Modifier
-                    .width(8.dp)
-                    .height(height.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(color)
-            )
-        }
-    }
-}
-
-@Composable
-private fun StereoAudioLevelVisualization(
-    levelLeft: Float,
-    levelRight: Float,
-    isRecording: Boolean
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // Left channel
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "L",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                modifier = Modifier.width(16.dp)
-            )
-            AudioLevelBar(level = levelLeft, isRecording = isRecording)
-        }
-        
-        // Right channel
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "R",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isRecording) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                modifier = Modifier.width(16.dp)
-            )
-            AudioLevelBar(level = levelRight, isRecording = isRecording)
-        }
-    }
 }
 
 @Composable
@@ -297,18 +209,24 @@ private fun AudioLevelBar(level: Float, isRecording: Boolean) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun LanguageSelector(
     selectedLanguage: RecordingLanguage,
     onLanguageSelected: (RecordingLanguage) -> Unit,
     enabled: Boolean
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        maxItemsInEachRow = 2,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         RecordingLanguage.entries.forEach { language ->
             val isSelected = language == selectedLanguage
             
             FilledTonalButton(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
                 onClick = { onLanguageSelected(language) },
                 enabled = enabled,
                 colors = ButtonDefaults.filledTonalButtonColors(
@@ -316,7 +234,7 @@ private fun LanguageSelector(
                     contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
-                Text("${language.flag} ${language.displayName}")
+                Text("${language.flag} ${language.displayName}", maxLines = 1, style = MaterialTheme.typography.labelMedium)
             }
         }
     }
@@ -438,6 +356,7 @@ private fun ControlButtons(
 private fun SaveRecordingDialog(
     recording: com.bigdictaphone.app.data.Recording?,
     title: String,
+    busy: Boolean,
     onTitleChange: (String) -> Unit,
     onSave: () -> Unit,
     onDiscard: () -> Unit
@@ -467,21 +386,21 @@ private fun SaveRecordingDialog(
                 }
                 
                 Text(
-                    "The recording will be transcribed and summarized automatically.",
+                    if (recording?.transcriptionMode == TranscriptionMode.CLOUD) "Audio will be uploaded to Gemini for transcription and a summary." else "Audio stays on this phone. A downloaded local model is needed to transcribe it.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
         confirmButton = {
-            Button(onClick = onSave) {
+            Button(onClick = onSave, enabled = !busy) {
                 Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Save & Process")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDiscard) {
+            TextButton(onClick = onDiscard, enabled = !busy) {
                 Text("Discard", color = MaterialTheme.colorScheme.error)
             }
         }

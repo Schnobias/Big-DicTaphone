@@ -21,6 +21,12 @@
 		APP012 /* GeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC011; };
 		APP013 /* EmailComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC012; };
 		APP014 /* RecordingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC013; };
+		APP015 /* SMTPService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC014; };
+		APP016 /* RateLimitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC015; };
+		APP017 /* Stakeholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC016; };
+		APP018 /* ToDoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC017; };
+		APP019 /* SwiftSMTP in Frameworks */ = {isa = PBXBuildFile; productRef = PKG001; };
+		TEST001 /* SpeechRecognizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TESTSRC001; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +44,12 @@
 		SRC011 /* GeminiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiService.swift; sourceTree = "<group>"; };
 		SRC012 /* EmailComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailComposer.swift; sourceTree = "<group>"; };
 		SRC013 /* RecordingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingManager.swift; sourceTree = "<group>"; };
+		SRC014 /* SMTPService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMTPService.swift; sourceTree = "<group>"; };
+		SRC015 /* RateLimitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitService.swift; sourceTree = "<group>"; };
+		SRC016 /* Stakeholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stakeholder.swift; sourceTree = "<group>"; };
+		SRC017 /* ToDoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToDoListView.swift; sourceTree = "<group>"; };
+		TESTPROD001 /* Big-DicTaphoneTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Big-DicTaphoneTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		TESTSRC001 /* SpeechRecognizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognizerTests.swift; sourceTree = "<group>"; };
 		RES001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -46,6 +58,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				APP019 /* SwiftSMTP in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -56,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				GRP002 /* Big-DicTaphone */,
+				GRP008 /* Big-DicTaphoneTests */,
 				GRP007 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -80,6 +94,7 @@
 				SRC004 /* RecordingListView.swift */,
 				SRC005 /* RecordingDetailView.swift */,
 				SRC006 /* SettingsView.swift */,
+				SRC017 /* ToDoListView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -89,6 +104,7 @@
 			children = (
 				SRC007 /* Recording.swift */,
 				SRC008 /* MeetingSummary.swift */,
+				SRC016 /* Stakeholder.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -101,6 +117,8 @@
 				SRC011 /* GeminiService.swift */,
 				SRC012 /* EmailComposer.swift */,
 				SRC013 /* RecordingManager.swift */,
+				SRC014 /* SMTPService.swift */,
+				SRC015 /* RateLimitService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -128,10 +146,24 @@
 			);
 			dependencies = (
 			);
+			packageProductDependencies = (
+				PKG001 /* SwiftSMTP */,
+			);
 			name = "Big-DicTaphone";
 			productName = "Big-DicTaphone";
 			productReference = PRD001 /* Big-DicTaphone.app */;
 			productType = "com.apple.product-type.application";
+		};
+		TGT002 /* Big-DicTaphoneTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFG004;
+			buildPhases = (TESTSRC100 /* Sources */, TESTFRM001 /* Frameworks */, TESTRES001 /* Resources */);
+			buildRules = ();
+			dependencies = (TESTDEP001 /* PBXTargetDependency */);
+			name = Big-DicTaphoneTests;
+			productName = Big-DicTaphoneTests;
+			productReference = TESTPROD001 /* Big-DicTaphoneTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -158,11 +190,15 @@
 				nl,
 			);
 			mainGroup = GRP001;
+			packageReferences = (
+				PKGREF001 /* Swift-SMTP */,
+			);
 			productRefGroup = GRP007 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				TGT001 /* Big-DicTaphone */,
+				TGT002 /* Big-DicTaphoneTests */,
 			);
 		};
 /* End PBXProject section */
@@ -177,6 +213,8 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+		TESTRES001 /* Test Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		TESTFRM001 /* Test Frameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 
 /* Begin PBXSourcesBuildPhase section */
 		SRC100 /* Sources */ = {
@@ -196,10 +234,17 @@
 				APP012 /* GeminiService.swift in Sources */,
 				APP013 /* EmailComposer.swift in Sources */,
 				APP014 /* RecordingManager.swift in Sources */,
+				APP015 /* SMTPService.swift in Sources */,
+				APP016 /* RateLimitService.swift in Sources */,
+				APP017 /* Stakeholder.swift in Sources */,
+				APP018 /* ToDoListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+		TESTSRC100 /* Test Sources */ = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (TEST001 /* SpeechRecognizerTests.swift in Sources */); runOnlyForDeploymentPostprocessing = 0; };
+		TESTDEP001 /* PBXTargetDependency */ = { isa = PBXTargetDependency; target = TGT001 /* Big-DicTaphone */; targetProxy = TESTPROXY001; };
+		TESTPROXY001 /* PBXContainerItemProxy */ = { isa = PBXContainerItemProxy; containerPortal = PRJ001 /* Project object */; proxyType = 1; remoteGlobalIDString = TGT001; remoteInfo = Big-DicTaphone; };
 
 /* Begin XCBuildConfiguration section */
 		CFG101 /* Debug */ = {
@@ -388,6 +433,8 @@
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
+		CFG301 /* Test Debug */ = { isa = XCBuildConfiguration; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = "com.yourname.Big-DicTaphoneTests"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Big-DicTaphone.app/Big-DicTaphone"; }; name = Debug; };
+		CFG302 /* Test Release */ = { isa = XCBuildConfiguration; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = "com.yourname.Big-DicTaphoneTests"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Big-DicTaphone.app/Big-DicTaphone"; }; name = Release; };
 
 /* Begin XCConfigurationList section */
 		CFG001 /* Build configuration list for PBXProject */ = {
@@ -409,6 +456,27 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+		CFG004 /* Build configuration list for tests */ = { isa = XCConfigurationList; buildConfigurations = (CFG301 /* Test Debug */, CFG302 /* Test Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+
+/* Begin XCRemoteSwiftPackageReference section */
+		PKGREF001 /* Swift-SMTP */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Kitura/Swift-SMTP.git";
+				requirement = {
+				kind = exactVersion;
+				version = 5.1.0;
+			};
+		};
+		GRP008 /* Big-DicTaphoneTests */ = { isa = PBXGroup; children = (TESTSRC001 /* SpeechRecognizerTests.swift */); path = Big-DicTaphoneTests; sourceTree = "<group>"; };
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		PKG001 /* SwiftSMTP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = PKGREF001;
+			productName = SwiftSMTP;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = PRJ001 /* Project object */;
 }

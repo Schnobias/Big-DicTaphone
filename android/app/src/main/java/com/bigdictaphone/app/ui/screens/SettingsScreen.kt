@@ -65,6 +65,8 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
+            LocalTranscriptionSettings(viewModel)
+            Divider()
             // Personal Settings
             SettingsSection(title = "Personal") {
                 // Email

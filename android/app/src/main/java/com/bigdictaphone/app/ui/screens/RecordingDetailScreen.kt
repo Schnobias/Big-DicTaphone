@@ -2,6 +2,8 @@ package com.bigdictaphone.app.ui.screens
 
 import android.media.MediaPlayer
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
+import com.bigdictaphone.app.data.TranscriptionMode
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -18,6 +20,9 @@ import androidx.compose.ui.unit.dp
 import com.bigdictaphone.app.data.ActionItem
 import com.bigdictaphone.app.data.ProcessingStatus
 import com.bigdictaphone.app.data.Recording
+import com.bigdictaphone.app.data.JobStatus
+import com.bigdictaphone.app.data.CaptureStatus
+import com.bigdictaphone.app.data.DeliveryStatus
 import com.bigdictaphone.app.services.AudioRecorderService
 import com.bigdictaphone.app.viewmodel.RecordingViewModel
 import kotlinx.coroutines.delay
@@ -43,7 +48,11 @@ fun RecordingDetailScreen(
     var isPlaying by remember { mutableStateOf(false) }
     var playbackProgress by remember { mutableStateOf(0f) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
-    var showTranscription by remember { mutableStateOf(false) }
+    var showTranscription by remember { mutableStateOf(true) }
+    val isProcessing by viewModel.isProcessing.collectAsState()
+    val activeProcessingId by viewModel.activeProcessingId.collectAsState()
+    val processingMessage by viewModel.processingMessage.collectAsState()
+    var playbackError by remember { mutableStateOf<String?>(null) }
     
     // Cleanup media player
     DisposableEffect(Unit) {
@@ -57,7 +66,7 @@ fun RecordingDetailScreen(
         while (isPlaying) {
             mediaPlayer?.let { player ->
                 if (player.isPlaying) {
-                    playbackProgress = player.currentPosition.toFloat() / player.duration.toFloat()
+                    playbackProgress = player.currentPosition.toFloat() / player.duration.coerceAtLeast(1).toFloat()
                 } else {
                     isPlaying = false
                     playbackProgress = 0f
@@ -84,7 +93,7 @@ fun RecordingDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.reprocessRecording(recording) }) {
+                    IconButton(enabled = activeProcessingId != recording.id && recording.jobStatus != JobStatus.QUEUED && recording.captureStatus != CaptureStatus.ACTIVE && recording.captureStatus != CaptureStatus.PAUSED, onClick = { viewModel.reprocessRecording(recording) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reprocess")
                     }
                 }
@@ -102,19 +111,46 @@ fun RecordingDetailScreen(
             // Header with recording info
             HeaderCard(recording = recording)
             
+            Text(recording.transcriptionMode?.title ?: "Choose a default transcription mode in Settings", style = MaterialTheme.typography.labelLarge)
+            recording.processingError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (recording.jobStatus == JobStatus.QUEUED) {
+                Text("Queued for transcription. Audio is saved.")
+                TextButton(onClick = { viewModel.cancelProcessing(recording.id) }) { Text("Cancel queued job") }
+                TextButton(onClick = { viewModel.reprocessRecording(recording) }) { Text("Resume queue") }
+            }
+            if (recording.deliveryStatus != DeliveryStatus.NONE) Text(when (recording.deliveryStatus) {
+                DeliveryStatus.SENDING -> "Transcript saved. Automatic email is being delivered."
+                DeliveryStatus.SENT -> "Automatic email was accepted by the mail server."
+                DeliveryStatus.FAILED -> "Automatic email was not sent. Check email settings; no automatic retry is scheduled."
+                DeliveryStatus.UNCERTAIN -> "Email delivery could not be confirmed. Check your sent mail before composing another email. No automatic retry is scheduled."
+                else -> ""
+            }, style = MaterialTheme.typography.bodySmall)
+            if (recording.status != ProcessingStatus.COMPLETE && !recording.transcription.isNullOrBlank()) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Previously saved transcript", fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(8.dp))
+                        SelectionContainer { Text(recording.transcription) }
+                    }
+                }
+            }
             // Audio player
             AudioPlayerCard(
                 recording = recording,
                 isPlaying = isPlaying,
                 progress = playbackProgress,
                 onPlayPause = {
+                    try {
                     if (isPlaying) {
                         mediaPlayer?.pause()
                         isPlaying = false
                     } else {
                         if (mediaPlayer == null) {
                             val file = viewModel.audioRecorder.getRecordingFile(recording.audioFileName)
-                            mediaPlayer = MediaPlayer().apply {
+                            val player = MediaPlayer()
+                            mediaPlayer = player
+                            player.apply {
                                 setDataSource(file.absolutePath)
                                 prepare()
                                 start()
@@ -123,6 +159,11 @@ fun RecordingDetailScreen(
                             mediaPlayer?.start()
                         }
                         isPlaying = true
+                        playbackError = null
+                    }
+                    } catch (e: Exception) {
+                        mediaPlayer?.release(); mediaPlayer = null; isPlaying = false
+                        playbackError = "Could not play this recording: "+e.message
                     }
                 }
             )
@@ -131,6 +172,8 @@ fun RecordingDetailScreen(
             when (recording.status) {
                 ProcessingStatus.TRANSCRIBING, ProcessingStatus.SUMMARIZING -> {
                     ProcessingCard(status = recording.status)
+                    if (activeProcessingId == recording.id) Text(processingMessage)
+                    TextButton(onClick = { viewModel.cancelProcessing(recording.id) }) { Text("Cancel transcription") }
                 }
                 ProcessingStatus.FAILED -> {
                     FailedCard(
@@ -214,16 +257,17 @@ fun RecordingDetailScreen(
                                 
                                 if (showTranscription) {
                                     Spacer(Modifier.height(12.dp))
-                                    Text(
+                                    SelectionContainer { Text(
                                         text = transcription,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    ) }
                                 }
                             }
                         }
                     }
                     
+                    if (recording.summary != null) {
                     // Personal Summary Card
                     PersonalSummaryCard(
                         recording = recording,
@@ -266,6 +310,7 @@ fun RecordingDetailScreen(
                             )
                         }
                     }
+                    }
                 }
                 ProcessingStatus.RECORDED -> {
                     WaitingCard(
@@ -277,6 +322,7 @@ fun RecordingDetailScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HeaderCard(recording: Recording) {
     val dateFormat = SimpleDateFormat("MMMM d, yyyy 'at' h:mm a", Locale.getDefault())
@@ -287,11 +333,12 @@ private fun HeaderCard(recording: Recording) {
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         )
     ) {
-        Row(
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -578,7 +625,7 @@ private fun PersonalSummaryCard(
     initialBody: String
 ) {
     var showPreview by remember { mutableStateOf(false) }
-    var body by remember { mutableStateOf(initialBody) }
+    var body by remember(initialBody) { mutableStateOf(initialBody) }
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -637,7 +684,7 @@ private fun PersonalSummaryCard(
                 ) {
                     Icon(Icons.Default.Send, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Send Now")
+                    Text("Open email draft")
                 }
             } else {
                 Spacer(Modifier.height(8.dp))
@@ -648,7 +695,7 @@ private fun PersonalSummaryCard(
                 ) {
                     Icon(Icons.Default.Email, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Send to Me")
+                    Text("Compose email to me")
                 }
             }
         }
@@ -663,7 +710,7 @@ private fun StakeholderEmailCard(
     initialBody: String
 ) {
     var showPreview by remember { mutableStateOf(true) } // Default open
-    var body by remember { mutableStateOf(initialBody) }
+    var body by remember(initialBody) { mutableStateOf(initialBody) }
     
     Card(
         modifier = Modifier
@@ -717,12 +764,12 @@ private fun StakeholderEmailCard(
                         onSend(stakeholder.email, body)
                         showPreview = false // Auto-close
                     },
-                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
                 ) {
                     Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Send Update")
+                    Text("Open email draft")
                 }
             }
         }

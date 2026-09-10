@@ -10,6 +10,10 @@ class RecordingManager: ObservableObject {
     @Published var processingMessage = ""
     @Published var errorMessage: String?
     
+    @Published var localOnly: Bool {
+        didSet { UserDefaults.standard.set(localOnly, forKey: "local_only") }
+    }
+
     // Preferences
     @Published var userEmail: String {
         didSet { UserDefaults.standard.set(userEmail, forKey: "user_email") }
@@ -29,7 +33,7 @@ class RecordingManager: ObservableObject {
         didSet { UserDefaults.standard.set(smtpUser, forKey: "smtp_user") }
     }
     @Published var smtpPass: String {
-        didSet { UserDefaults.standard.set(smtpPass, forKey: "smtp_pass") }
+        didSet { if !CredentialStore.save(smtpPass, account: "smtp_pass") { errorMessage = "Could not save SMTP password securely." } }
     }
     
     private let fileManager = FileManager.default
@@ -41,12 +45,13 @@ class RecordingManager: ObservableObject {
     private let geminiService = GeminiService()
     
     init() {
+        self.localOnly = UserDefaults.standard.object(forKey: "local_only") as? Bool ?? true
         self.userEmail = UserDefaults.standard.string(forKey: "user_email") ?? ""
         self.autoSendEnabled = UserDefaults.standard.bool(forKey: "auto_send_enabled")
         self.smtpHost = UserDefaults.standard.string(forKey: "smtp_host") ?? "smtp.gmail.com"
         self.smtpPort = UserDefaults.standard.string(forKey: "smtp_port") ?? "587"
         self.smtpUser = UserDefaults.standard.string(forKey: "smtp_user") ?? ""
-        self.smtpPass = UserDefaults.standard.string(forKey: "smtp_pass") ?? ""
+        self.smtpPass = CredentialStore.read("smtp_pass") ?? ""
         
         loadRecordings()
         loadStakeholders()
@@ -167,9 +172,12 @@ class RecordingManager: ObservableObject {
     
     /// Process a recording: transcribe and summarize
     func processRecording(_ recording: Recording) async {
+        guard !isProcessing else { return }
+        let processLocally = localOnly
         var updatedRecording = recording
         
         isProcessing = true
+        defer { isProcessing = false; processingMessage = "" }
         errorMessage = nil
         
         do {
@@ -187,12 +195,19 @@ class RecordingManager: ObservableObject {
             
             let transcription = try await speechRecognizer.transcribe(
                 audioURL: recording.audioURL,
-                language: recording.language
+                language: recording.language,
+                onDeviceOnly: processLocally
             )
             
             updatedRecording.transcription = transcription
             updateRecording(updatedRecording)
             
+            if processLocally {
+                updatedRecording.summary = nil
+                updatedRecording.status = .complete
+                updateRecording(updatedRecording)
+                return
+            }
             // Step 2: Summarize with AI
             processingMessage = "Generating summary..."
             updatedRecording.status = .summarizing
@@ -317,8 +332,14 @@ class RecordingManager: ObservableObject {
             recordings = try JSONDecoder().decode([Recording].self, from: data)
             
             // Verify audio files still exist
-            recordings = recordings.filter { recording in
-                fileManager.fileExists(atPath: recording.audioURL.path)
+            recordings = recordings.map { recording in
+                var recovered = recording
+                if !fileManager.fileExists(atPath: recording.audioURL.path) {
+                    recovered.status = .mediaMissing
+                } else if recording.status == .transcribing || recording.status == .summarizing {
+                    recovered.status = .failed
+                }
+                return recovered
             }
         } catch {
             print("Failed to load recordings: \(error)")

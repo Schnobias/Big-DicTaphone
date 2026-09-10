@@ -6,9 +6,10 @@ Native Android version of Big-DicTaphone - a voice recording app with AI-powered
 
 - 🎤 **Voice Recording** with audio visualization
 - 🌍 **Multi-language** support (Dutch & English)
-- 🤖 **AI Transcription & Summarization** using Gemini Flash
+- 🗣️ **Local Transcription** using downloadable Whisper Tiny/Base models (Dutch and English)
+- 🤖 **Optional AI Summarization** using Gemini Flash
 - 📧 **Email Summaries** directly from the app
-- 📱 **Material You** design with dynamic colors (Pixel 7a optimized)
+- 📱 **Material You** design with dynamic colors
 
 ## Setup
 
@@ -16,8 +17,8 @@ Native Android version of Big-DicTaphone - a voice recording app with AI-powered
 
 - Android Studio Hedgehog (2023.1.1) or later
 - JDK 17
-- Android SDK 34
-- A Pixel 7a or Android device running Android 13+
+- Android SDK 36 / API 36
+- A Pixel 11 Pro or another ARM64 Android device; the portable inference path supports Android 8+
 
 ### Building
 
@@ -36,7 +37,7 @@ Native Android version of Big-DicTaphone - a voice recording app with AI-powered
    - Copy the key
 
 4. **Run the App**
-   - Connect your Pixel 7a via USB (enable USB debugging)
+   - Connect a test device via USB (enable USB debugging)
    - Select your device in the device dropdown
    - Click the Run button (or press Shift+F10)
 
@@ -78,17 +79,13 @@ Native Android version of Big-DicTaphone - a voice recording app with AI-powered
 | UI | Jetpack Compose |
 | Design | Material 3 / Material You |
 | Audio | MediaRecorder |
-| AI | Google Gemini 1.5 Flash |
+| AI | Local Whisper Tiny/Base; optional Google Gemini 2.5 Flash |
 | Storage | DataStore + JSON files |
 | Networking | OkHttp |
 
-## Pixel 7a Optimization
+## Local transcription and privacy
 
-This app is optimized for Pixel 7a:
-- **Material You** - Dynamic color theming from your wallpaper
-- **Edge-to-edge** - Full screen utilization
-- **Haptic feedback** - Uses the Pixel's excellent haptic motor
-- **Voice to Text** - Leverages Google's on-device speech recognition
+Whisper Tiny (74 MiB) and Base (141 MiB) are downloaded explicitly and verified before use. Both support Dutch and English. Audio is decoded and transcribed locally; there is no automatic cloud fallback. A single transcription is limited to two hours. Foreground capture and processing use the app service and notification, including while the screen is locked. Legacy recordings remain available when their audio file is present. Android 17 on the Pixel 11 Pro is the planned launch-device validation target; physical performance, battery and thermal results are pending.
 
 ## Project Structure
 
