@@ -8,21 +8,21 @@ jobs:
   android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: android-actions/setup-android@v4
       - name: Install Android build components
         run: sdkmanager "platforms;android-36" "ndk;28.2.13676358" "cmake;3.22.1"
       - name: Build APKs, unit tests and lint
         working-directory: android
         run: bash gradlew assembleDebug assembleDebugAndroidTest testDebugUnitTest lintDebug --console=plain
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: android-apks-and-reports
@@ -32,7 +32,7 @@ jobs:
   ios:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Select Xcode
         shell: bash
         run: |
@@ -66,7 +66,7 @@ jobs:
           xcodebuild -project Big-DicTaphone.xcodeproj -scheme Big-DicTaphone -sdk iphonesimulator -configuration Debug -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO test-without-building -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' 2>&1 | tee .logs/test-without-building.log
       - name: Upload iOS build, test and package logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-build-test-logs-and-resolved-package
           include-hidden-files: true
