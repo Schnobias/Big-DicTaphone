@@ -18,6 +18,7 @@ import com.bigdictaphone.app.R
 import com.bigdictaphone.app.BigDicTaphoneApplication
 import com.bigdictaphone.app.data.CaptureStatus
 import com.bigdictaphone.app.data.ProcessingStatus
+import com.bigdictaphone.app.data.JobStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -107,7 +108,7 @@ class RecordingForegroundService : Service() {
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> commandScope.launch { commandMutex.withLock { runCatching { startForegroundRecording(intent?.getStringExtra(EXTRA_RECORDING_ID)) }.onFailure { error ->
+            ACTION_START -> commandScope.launch { commandMutex.withLock { runCatching { startForegroundRecording(intent.getStringExtra(EXTRA_RECORDING_ID)) }.onFailure { error ->
                 android.util.Log.e("BigDicTaphone", "Could not start capture", error)
                 stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
             } } }
@@ -183,7 +184,6 @@ class RecordingForegroundService : Service() {
         isRunning = false
         metricsHandler.removeCallbacks(metricsTick)
 
-        val fileName = recorder.activeFileName
         val id = activeRecordingId
         var stopError: String? = null
         val duration = if (interrupted) {
@@ -200,6 +200,7 @@ class RecordingForegroundService : Service() {
         try {
             if (id != null) repository.update(id) { recording ->
                 recording.copy(duration = duration ?: recording.duration, status = ProcessingStatus.RECORDED, captureStatus = effectiveStatus,
+                    jobStatus = if (effectiveStatus == CaptureStatus.SAVED) JobStatus.QUEUED else recording.jobStatus,
                     processingError = when {
                         interrupted -> "Capture was interrupted; original audio was preserved."
                         stopError != null -> stopError
