@@ -28,10 +28,16 @@ class SmtpEmailService {
         try {
             val props = Properties()
             props["mail.smtp.auth"] = "true"
-            props["mail.smtp.starttls.enable"] = "true"
+            require(port in 1..65535) { "Invalid SMTP port." }
+            props["mail.smtp.ssl.enable"] = (port == 465).toString()
+            props["mail.smtp.starttls.enable"] = (port != 465).toString()
+            props["mail.smtp.starttls.required"] = (port != 465).toString()
+            props["mail.smtp.ssl.checkserveridentity"] = "true"
+            props["mail.smtp.connectiontimeout"] = "15000"
+            props["mail.smtp.timeout"] = "30000"
+            props["mail.smtp.writetimeout"] = "30000"
             props["mail.smtp.host"] = host
             props["mail.smtp.port"] = port.toString()
-            props["mail.smtp.ssl.trust"] = host
 
             val session = Session.getInstance(props, object : javax.mail.Authenticator() {
                 override fun getPasswordAuthentication(): PasswordAuthentication {
@@ -46,7 +52,7 @@ class SmtpEmailService {
             message.setText(body, "utf-8") // Assuming plain text for now, could become html with setContent(body, "text/html")
 
             Transport.send(message)
-            Log.i(TAG, "Email sent successfully to $to")
+            Log.i(TAG, "Email sent successfully")
             Result.success(Unit)
         } catch (e: MessagingException) {
             Log.e(TAG, "Failed to send email", e)

@@ -16,7 +16,12 @@ data class Recording(
     val language: RecordingLanguage = RecordingLanguage.AUTO,
     val transcription: String? = null,
     val summary: MeetingSummary? = null,
-    val status: ProcessingStatus = ProcessingStatus.RECORDED
+    val status: ProcessingStatus = ProcessingStatus.RECORDED,
+    val transcriptionMode: TranscriptionMode? = null,
+    val processingError: String? = null,
+    val jobStatus: JobStatus = JobStatus.NONE,
+    val deliveryStatus: DeliveryStatus = DeliveryStatus.NONE,
+    val captureStatus: CaptureStatus = CaptureStatus.SAVED
 ) {
     val formattedDuration: String
         get() {
@@ -26,9 +31,9 @@ data class Recording(
             val seconds = totalSeconds % 60
             
             return if (hours > 0) {
-                String.format("%d:%02d:%02d", hours, minutes, seconds)
+                String.format(java.util.Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
             } else {
-                String.format("%d:%02d", minutes, seconds)
+                String.format(java.util.Locale.getDefault(), "%d:%02d", minutes, seconds)
             }
         }
 }
@@ -58,3 +63,12 @@ enum class ProcessingStatus(val displayName: String) {
     val isProcessing: Boolean
         get() = this == TRANSCRIBING || this == SUMMARIZING
 }
+
+@Serializable
+enum class JobStatus { NONE, QUEUED, RUNNING, RETRYABLE, CANCELLED, COMPLETE }
+
+@Serializable
+enum class DeliveryStatus { NONE, SENDING, SENT, FAILED, UNCERTAIN }
+
+@Serializable
+enum class CaptureStatus { ACTIVE, PAUSED, PENDING, SAVED, INTERRUPTED }

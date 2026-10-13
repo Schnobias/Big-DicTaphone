@@ -26,7 +26,7 @@ struct RecordingDetailView: View {
                 // Processing status or summary content
                 if recording.status.isProcessing {
                     processingSection
-                } else if recording.status == .failed {
+                } else if recording.status == .failed || recording.status == .mediaMissing {
                     failedSection
                 } else if recording.status == .complete {
                     summaryContent
@@ -286,7 +286,7 @@ struct RecordingDetailView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.red)
             
-            Text("Processing Failed")
+            Text(recording.status == .mediaMissing ? "Audio Missing" : "Processing Failed")
                 .font(.headline)
             
             if let error = recordingManager.errorMessage {
@@ -307,6 +307,7 @@ struct RecordingDetailView: View {
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
+            .disabled(recording.status == .mediaMissing)
         }
         .frame(maxWidth: .infinity)
         .padding(40)
@@ -680,7 +681,8 @@ struct StakeholderEmailCard: View {
                     "Follow up on client feedback",
                     "Discuss hiring needs"
                 ],
-                managementDraft: "The meeting was productive with key decisions made on project priorities."
+                managementDraft: "The meeting was productive with key decisions made on project priorities.",
+                funnyQuote: nil
             ),
             status: .complete
         )))

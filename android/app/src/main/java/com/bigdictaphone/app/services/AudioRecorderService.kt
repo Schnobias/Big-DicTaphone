@@ -16,7 +16,7 @@ class AudioRecorderService(private val context: Context) {
     
     private var mediaRecorder: MediaRecorder? = null
     private var recordingFile: File? = null
-    private var startTime: Long = 0
+    private val clock = RecordingClock { android.os.SystemClock.elapsedRealtime() }
     
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -36,6 +36,10 @@ class AudioRecorderService(private val context: Context) {
     
     private val _audioLevelRight = MutableStateFlow(0f)
     val audioLevelRight: StateFlow<Float> = _audioLevelRight.asStateFlow()
+    val activeFileName: String? get() = recordingFile?.name
+    private val _interrupted = MutableStateFlow(false)
+    val interrupted: StateFlow<Boolean> = _interrupted.asStateFlow()
+    @Volatile var onInterruption: (() -> Unit)? = null
     
     /**
      * Get the recordings directory
@@ -51,45 +55,54 @@ class AudioRecorderService(private val context: Context) {
     /**
      * Start recording to the specified filename
      */
+    @Synchronized
     fun startRecording(fileName: String): File {
-        val file = File(getRecordingsDir(), fileName)
+        check(mediaRecorder == null) { "A recording is already active." }
+        val file = getRecordingFile(fileName)
         recordingFile = file
-        
-        mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(context)
-        } else {
+        val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else {
             @Suppress("DEPRECATION")
             MediaRecorder()
-        }.apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setAudioChannels(2) // Enable stereo
-            setAudioEncodingBitRate(128000)
-            setAudioSamplingRate(44100)
-            setOutputFile(file.absolutePath)
-            
-            try {
-                prepare()
-                start()
-                _isRecording.value = true
-                _isPaused.value = false
-                startTime = System.currentTimeMillis()
-            } catch (e: IOException) {
-                e.printStackTrace()
-                throw e
-            }
         }
-        
-        return file
+        mediaRecorder = recorder
+        try {
+            recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+            recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            recorder.setAudioChannels(1)
+            recorder.setAudioEncodingBitRate(96000)
+            recorder.setAudioSamplingRate(44100)
+            recorder.setOutputFile(file.absolutePath)
+            recorder.setOnErrorListener { _, _, _ ->
+                _interrupted.value = true
+                onInterruption?.invoke()
+            }
+            recorder.prepare()
+            recorder.start()
+            clock.start()
+            _recordingTime.value = 0
+            _interrupted.value = false
+            _isRecording.value = true
+            _isPaused.value = false
+            return file
+        } catch (e: Exception) {
+            recorder.release()
+            mediaRecorder = null
+            recordingFile = null
+            throw e
+        }
     }
-    
+
     /**
      * Pause the current recording
      */
+    @Synchronized
     fun pauseRecording() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            if (!_isRecording.value || _isPaused.value) return
             mediaRecorder?.pause()
+            clock.pause()
+            _recordingTime.value = clock.duration()
             _isPaused.value = true
         }
     }
@@ -97,9 +110,12 @@ class AudioRecorderService(private val context: Context) {
     /**
      * Resume a paused recording
      */
+    @Synchronized
     fun resumeRecording() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            if (!_isRecording.value || !_isPaused.value) return
             mediaRecorder?.resume()
+            clock.resume()
             _isPaused.value = false
         }
     }
@@ -107,58 +123,60 @@ class AudioRecorderService(private val context: Context) {
     /**
      * Stop recording and return the duration
      */
+    @Synchronized
     fun stopRecording(): Long {
-        val duration = _recordingTime.value
-        
+        val recorder = mediaRecorder ?: error("No active recording.")
+        val duration = clock.duration()
         try {
-            mediaRecorder?.apply {
-                stop()
-                release()
-            }
+            recorder.stop()
+            check(recordingFile?.length()?.let { it > 0 } == true) { "The recording is empty." }
+            _recordingTime.value = duration
+            recordingFile = null
+            return duration
         } catch (e: Exception) {
-            e.printStackTrace()
+            throw IOException("Recording was too short or could not be saved. Please record again.", e)
+        } finally {
+            try { recorder.release() } finally { mediaRecorder = null; resetLevels() }
         }
-        
-        mediaRecorder = null
-        _isRecording.value = false
-        _isPaused.value = false
-        _audioLevel.value = 0f
-        _audioLevelLeft.value = 0f
-        _audioLevelRight.value = 0f
-        
-        return duration
     }
-    
-    /**
-     * Cancel recording and delete the file
-     */
+
+    @Synchronized
     fun cancelRecording() {
-        try {
-            mediaRecorder?.apply {
-                stop()
-                release()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        
+        try { mediaRecorder?.stop() } catch (_: Exception) { }
+        finally { mediaRecorder?.release(); mediaRecorder = null; resetLevels() }
         recordingFile?.delete()
         recordingFile = null
+        _recordingTime.value = 0
+        _interrupted.value = false
+    }
+
+    /** Finalize a recorder after an owner/service interruption without deleting evidence. */
+    @Synchronized
+    fun preserveAfterInterruption(): File? {
+        val file = recordingFile ?: return null
+        try { mediaRecorder?.stop() } catch (_: Exception) { }
+        try { mediaRecorder?.release() } catch (_: Exception) { }
         mediaRecorder = null
+        resetLevels()
+        recordingFile = null
+        _interrupted.value = false
+        return file.takeIf { it.isFile && it.length() > 0L }
+    }
+
+    private fun resetLevels() {
         _isRecording.value = false
         _isPaused.value = false
-        _recordingTime.value = 0
         _audioLevel.value = 0f
         _audioLevelLeft.value = 0f
         _audioLevelRight.value = 0f
     }
-    
+
     /**
      * Update the recording time and audio level (call this from a timer)
      */
     fun updateMetrics() {
         if (_isRecording.value && !_isPaused.value) {
-            _recordingTime.value = System.currentTimeMillis() - startTime
+            _recordingTime.value = clock.duration()
             
             // Get audio amplitude (0-32767, normalize to 0-1)
             val maxAmplitude = try {
@@ -169,10 +187,9 @@ class AudioRecorderService(private val context: Context) {
             val baseLevel = (maxAmplitude.toFloat() / 32767f).coerceIn(0f, 1f)
             _audioLevel.value = baseLevel
             
-            // Simulate stereo with natural variation (microphones pick up slightly different levels)
-            val variation = kotlin.random.Random.nextFloat() * 0.2f - 0.1f // -10% to +10%
-            _audioLevelLeft.value = (baseLevel * (1f + variation)).coerceIn(0f, 1f)
-            _audioLevelRight.value = (baseLevel * (1f - variation)).coerceIn(0f, 1f)
+            // MediaRecorder exposes one peak meter, not independent channel measurements.
+            _audioLevelLeft.value = baseLevel
+            _audioLevelRight.value = baseLevel
         }
     }
     
@@ -180,6 +197,7 @@ class AudioRecorderService(private val context: Context) {
      * Get the file path for a recording
      */
     fun getRecordingFile(fileName: String): File {
+        require(fileName == File(fileName).name && !fileName.contains('\\') && fileName.endsWith(".m4a")) { "Invalid recording filename." }
         return File(getRecordingsDir(), fileName)
     }
     
@@ -201,9 +219,9 @@ class AudioRecorderService(private val context: Context) {
             val seconds = totalSeconds % 60
             
             return if (hours > 0) {
-                String.format("%d:%02d:%02d", hours, minutes, seconds)
+                String.format(java.util.Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
             } else {
-                String.format("%02d:%02d", minutes, seconds)
+                String.format(java.util.Locale.getDefault(), "%02d:%02d", minutes, seconds)
             }
         }
     }

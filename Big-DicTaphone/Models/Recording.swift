@@ -74,6 +74,11 @@ struct Recording: Identifiable, Codable {
     }
 }
 
+extension Recording: Hashable {
+    static func == (lhs: Recording, rhs: Recording) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
 /// Supported languages for transcription
 enum RecordingLanguage: String, Codable, CaseIterable, Identifiable {
     case auto = "auto"
@@ -109,13 +114,14 @@ enum ProcessingStatus: String, Codable {
     case summarizing = "Summarizing..."
     case complete = "Complete"
     case failed = "Failed"
+    case mediaMissing = "Audio Missing"
     
     var color: String {
         switch self {
         case .recorded: return "gray"
         case .transcribing, .summarizing: return "orange"
         case .complete: return "green"
-        case .failed: return "red"
+        case .failed, .mediaMissing: return "red"
         }
     }
     

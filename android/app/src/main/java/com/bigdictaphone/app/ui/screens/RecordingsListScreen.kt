@@ -17,6 +17,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.bigdictaphone.app.data.ProcessingStatus
 import com.bigdictaphone.app.data.Recording
+import com.bigdictaphone.app.data.CaptureStatus
+import com.bigdictaphone.app.data.JobStatus
 import com.bigdictaphone.app.viewmodel.RecordingViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -38,11 +40,14 @@ fun RecordingsListScreen(
             )
         }
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (isProcessing) {
+                ProcessingBanner(message = processingMessage, onCancel = viewModel::cancelProcessing)
+            }
             if (recordings.isEmpty()) {
                 EmptyState()
             } else {
@@ -61,10 +66,6 @@ fun RecordingsListScreen(
                 }
             }
             
-            // Processing overlay
-            if (isProcessing) {
-                ProcessingOverlay(message = processingMessage)
-            }
         }
     }
 }
@@ -159,6 +160,12 @@ private fun RecordingCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (recording.captureStatus == CaptureStatus.ACTIVE || recording.captureStatus == CaptureStatus.PAUSED) {
+                    Text(if (recording.captureStatus == CaptureStatus.PAUSED) "Capture paused" else "Recording now", style = MaterialTheme.typography.labelSmall)
+                } else if (recording.jobStatus == JobStatus.QUEUED) {
+                    Text("Queued", style = MaterialTheme.typography.labelSmall)
+                }
+                recording.processingError?.let { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 
                 Spacer(modifier = Modifier.height(4.dp))
                 
@@ -185,7 +192,7 @@ private fun RecordingCard(
             }
             
             // Status badge / delete button
-            if (recording.status.isProcessing) {
+            if (recording.jobStatus == JobStatus.RUNNING || recording.captureStatus == CaptureStatus.ACTIVE || recording.captureStatus == CaptureStatus.PAUSED) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
                     strokeWidth = 2.dp
@@ -228,31 +235,13 @@ private fun RecordingCard(
 }
 
 @Composable
-private fun ProcessingOverlay(message: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Surface(
-            modifier = Modifier.padding(32.dp),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 8.dp,
-            shadowElevation = 8.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                CircularProgressIndicator()
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Text(
-                    text = message.ifEmpty { "Processing..." },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+private fun ProcessingBanner(message: String, onCancel: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+            Text(message.ifEmpty { "Processing…" }, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = onCancel) { Text("Cancel") }
         }
     }
 }

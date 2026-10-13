@@ -58,7 +58,7 @@ class AudioRecorder: NSObject, ObservableObject {
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
             AVSampleRateKey: 44100,
-            AVNumberOfChannelsKey: 2, // Stereo for better speaker separation
+            AVNumberOfChannelsKey: 1, // Mono voice capture; stereo alone does not identify speakers
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
         
@@ -101,7 +101,7 @@ class AudioRecorder: NSObject, ObservableObject {
         timer?.invalidate()
         timer = nil
         
-        let duration = recordingTime
+        let duration = audioRecorder?.currentTime ?? recordingTime
         
         audioRecorder?.stop()
         audioRecorder = nil
@@ -137,7 +137,7 @@ class AudioRecorder: NSObject, ObservableObject {
             guard let self = self, let recorder = self.audioRecorder else { return }
             
             if !self.isPaused {
-                self.recordingTime += 0.1
+                self.recordingTime = recorder.currentTime
             }
             
             recorder.updateMeters()

@@ -144,7 +144,7 @@ struct RecordingRow: View {
             } else if recording.status == .complete {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-            } else if recording.status == .failed {
+            } else if recording.status == .failed || recording.status == .mediaMissing {
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(.red)
             }
@@ -163,6 +163,8 @@ struct RecordingRow: View {
             return "doc.text.fill"
         case .failed:
             return "exclamationmark.triangle"
+        case .mediaMissing:
+            return "waveform.slash"
         }
     }
     
@@ -174,7 +176,7 @@ struct RecordingRow: View {
             return .orange
         case .complete:
             return .green
-        case .failed:
+        case .failed, .mediaMissing:
             return .red
         }
     }

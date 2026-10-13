@@ -1,6 +1,7 @@
 package com.bigdictaphone.app
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.List
@@ -33,8 +34,18 @@ val bottomNavItems = listOf(Screen.Record, Screen.Recordings, Screen.ToDo, Scree
 fun BigDicTaphoneApp() {
     val navController = rememberNavController()
     val viewModel: RecordingViewModel = viewModel()
+    val error by viewModel.errorMessage.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(error) {
+        error?.let {
+            snackbar.showSnackbar(it, duration = SnackbarDuration.Long)
+            viewModel.clearError()
+        }
+    }
     
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             NavigationBar {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -84,7 +95,7 @@ fun BigDicTaphoneApp() {
                 )
             }
             composable(Screen.Settings.route) {
-                SettingsScreen()
+                SettingsScreen(viewModel = viewModel)
             }
             composable("recording/{recordingId}") { backStackEntry ->
                 val recordingId = backStackEntry.arguments?.getString("recordingId")

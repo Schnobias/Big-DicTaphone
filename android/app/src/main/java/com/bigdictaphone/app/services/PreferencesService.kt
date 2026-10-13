@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import com.bigdictaphone.app.data.Stakeholder
+import com.bigdictaphone.app.data.TranscriptionMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -17,6 +18,27 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
  * Service for managing app preferences using DataStore
  */
 class PreferencesService(private val context: Context) {
+    private val secrets = SecretStore()
+    suspend fun migrateSecrets() {
+        context.dataStore.edit { prefs ->
+            listOf(GEMINI_API_KEY, SMTP_PASS).forEach { key ->
+                val value = prefs[key].orEmpty()
+                if (value.isNotBlank() && !value.startsWith(SecretStore.PREFIX)) prefs[key] = secrets.encrypt(value)
+            }
+        }
+    }
+    val transcriptionMode = context.dataStore.data.map {
+        runCatching { TranscriptionMode.valueOf(it[TRANSCRIPTION_MODE].orEmpty()) }.getOrDefault(TranscriptionMode.LOCAL)
+    }
+    val localModel = context.dataStore.data.map {
+        runCatching { LocalModel.valueOf(it[LOCAL_MODEL].orEmpty()) }.getOrDefault(LocalModel.BASE)
+    }
+    suspend fun setTranscriptionMode(mode: TranscriptionMode) {
+        context.dataStore.edit { it[TRANSCRIPTION_MODE] = mode.name }
+    }
+    suspend fun setLocalModel(model: LocalModel) {
+        context.dataStore.edit { it[LOCAL_MODEL] = model.name }
+    }
     
     private val json = Json { ignoreUnknownKeys = true }
     
@@ -24,12 +46,12 @@ class PreferencesService(private val context: Context) {
     // MARK: - API Key
     
     val geminiApiKey: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[GEMINI_API_KEY] ?: ""
+        secrets.decrypt(preferences[GEMINI_API_KEY] ?: "")
     }
     
     suspend fun saveGeminiApiKey(apiKey: String) {
         context.dataStore.edit { preferences ->
-            preferences[GEMINI_API_KEY] = apiKey
+            preferences[GEMINI_API_KEY] = secrets.encrypt(apiKey.trim())
         }
     }
     
@@ -114,18 +136,20 @@ class PreferencesService(private val context: Context) {
     val smtpHost: Flow<String> = context.dataStore.data.map { it[SMTP_HOST] ?: "" }
     val smtpPort: Flow<String> = context.dataStore.data.map { it[SMTP_PORT] ?: "" }
     val smtpUser: Flow<String> = context.dataStore.data.map { it[SMTP_USER] ?: "" }
-    val smtpPass: Flow<String> = context.dataStore.data.map { it[SMTP_PASS] ?: "" }
+    val smtpPass: Flow<String> = context.dataStore.data.map { secrets.decrypt(it[SMTP_PASS] ?: "") }
 
     suspend fun saveSmtpSettings(host: String, port: String, user: String, pass: String) {
         context.dataStore.edit { preferences ->
             preferences[SMTP_HOST] = host
             preferences[SMTP_PORT] = port
             preferences[SMTP_USER] = user
-            preferences[SMTP_PASS] = pass
+            preferences[SMTP_PASS] = secrets.encrypt(pass)
         }
     }
 
     companion object {
+        private val TRANSCRIPTION_MODE = stringPreferencesKey("transcription_mode")
+        private val LOCAL_MODEL = stringPreferencesKey("local_model")
         private val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         private val USER_EMAIL = stringPreferencesKey("user_email")
         private val DEFAULT_LANGUAGE = stringPreferencesKey("default_language")
