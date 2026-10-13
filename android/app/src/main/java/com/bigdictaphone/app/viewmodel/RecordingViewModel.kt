@@ -78,6 +78,21 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         safeLaunch { try { block() } finally { _busy.value = false } }
     }
     fun setLanguage(language: RecordingLanguage) { _selectedLanguage.value = language }
+    private fun requireEditable(recording: Recording) {
+        require(activeProcessingId.value != recording.id && recording.jobStatus != JobStatus.RUNNING && recording.jobStatus != JobStatus.QUEUED) { "Cancel processing before editing this recording." }
+        require(recording.captureStatus != CaptureStatus.ACTIVE && recording.captureStatus != CaptureStatus.PAUSED) { "Stop recording before editing it." }
+        require(recording.deliveryStatus != DeliveryStatus.SENDING) { "Wait for email delivery to finish before editing." }
+    }
+    fun clearRecordingTranscript(id: String) { safeLaunch {
+        repository.update(id) { recording ->
+            requireEditable(recording)
+            recording.copy(transcription = null, summary = null, processingError = null,
+                status = ProcessingStatus.RECORDED, jobStatus = JobStatus.NONE)
+        }
+    } }
+    fun setRecordingMode(id: String, mode: TranscriptionMode) { safeLaunch {
+        repository.update(id) { recording -> requireEditable(recording); recording.copy(transcriptionMode = mode) }
+    } }
     fun setRecordingLanguage(id: String, language: RecordingLanguage) { safeLaunch {
         repository.update(id) { recording ->
             require(activeProcessingId.value != id && recording.jobStatus != JobStatus.RUNNING && recording.jobStatus != JobStatus.QUEUED) { "Cancel processing before changing the language." }

@@ -54,6 +54,7 @@ fun RecordingDetailScreen(
     val activeProcessingId by viewModel.activeProcessingId.collectAsState()
     val processingMessage by viewModel.processingMessage.collectAsState()
     var playbackError by remember { mutableStateOf<String?>(null) }
+    var showClearTranscript by remember { mutableStateOf(false) }
     
     // Cleanup media player
     DisposableEffect(Unit) {
@@ -129,7 +130,32 @@ fun RecordingDetailScreen(
             }
             Text("Language changes apply the next time you transcribe. Tap Reprocess to update an existing transcript.", style = MaterialTheme.typography.bodySmall)
             
-            Text(recording.transcriptionMode?.title ?: "Choose a default transcription mode in Settings", style = MaterialTheme.typography.labelLarge)
+            var modeMenuOpen by remember { mutableStateOf(false) }
+            Box {
+                OutlinedButton(enabled = canChangeLanguage && recording.deliveryStatus != DeliveryStatus.SENDING, onClick = { modeMenuOpen = true }) {
+                    Text(recording.transcriptionMode?.title ?: "Choose transcription option")
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                }
+                DropdownMenu(expanded = modeMenuOpen, onDismissRequest = { modeMenuOpen = false }) {
+                    TranscriptionMode.values().forEach { mode ->
+                        DropdownMenuItem(text = { Text(mode.title) }, onClick = {
+                            modeMenuOpen = false
+                            viewModel.setRecordingMode(recording.id, mode)
+                        })
+                    }
+                }
+            }
+            Text("Cloud transcription uploads audio to Gemini when you tap Reprocess.", style = MaterialTheme.typography.bodySmall)
+            if (recording.transcription != null || recording.summary != null) {
+                TextButton(enabled = canChangeLanguage && recording.deliveryStatus != DeliveryStatus.SENDING, onClick = { showClearTranscript = true }) { Text("Clear transcript and summary") }
+            }
+            if (showClearTranscript) {
+                AlertDialog(onDismissRequest = { showClearTranscript = false },
+                    title = { Text("Clear transcript and summary?") },
+                    text = { Text("Your audio will stay saved. You can transcribe it again locally or with cloud processing. Previously sent emails remain sent.") },
+                    confirmButton = { TextButton(onClick = { showClearTranscript = false; viewModel.clearRecordingTranscript(recording.id) }) { Text("Clear") } },
+                    dismissButton = { TextButton(onClick = { showClearTranscript = false }) { Text("Cancel") } })
+            }
             recording.processingError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             playbackError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (recording.jobStatus == JobStatus.QUEUED) {
