@@ -78,6 +78,13 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         safeLaunch { try { block() } finally { _busy.value = false } }
     }
     fun setLanguage(language: RecordingLanguage) { _selectedLanguage.value = language }
+    fun setRecordingLanguage(id: String, language: RecordingLanguage) { safeLaunch {
+        repository.update(id) { recording ->
+            require(activeProcessingId.value != id && recording.jobStatus != JobStatus.RUNNING && recording.jobStatus != JobStatus.QUEUED) { "Cancel processing before changing the language." }
+            require(recording.captureStatus != CaptureStatus.ACTIVE && recording.captureStatus != CaptureStatus.PAUSED) { "Stop recording before changing the language." }
+            recording.copy(language = language)
+        }
+    } }
     fun setTranscriptionMode(mode: TranscriptionMode) {
         pendingMode = mode
         _mode.value = mode

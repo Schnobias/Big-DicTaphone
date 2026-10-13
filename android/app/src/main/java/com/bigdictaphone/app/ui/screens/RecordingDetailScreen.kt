@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.bigdictaphone.app.data.ActionItem
 import com.bigdictaphone.app.data.ProcessingStatus
 import com.bigdictaphone.app.data.Recording
+import com.bigdictaphone.app.data.RecordingLanguage
 import com.bigdictaphone.app.data.JobStatus
 import com.bigdictaphone.app.data.CaptureStatus
 import com.bigdictaphone.app.data.DeliveryStatus
@@ -110,6 +111,23 @@ fun RecordingDetailScreen(
         ) {
             // Header with recording info
             HeaderCard(recording = recording)
+            var languageMenuOpen by remember { mutableStateOf(false) }
+            val canChangeLanguage = activeProcessingId != recording.id && recording.jobStatus != JobStatus.RUNNING && recording.jobStatus != JobStatus.QUEUED && recording.captureStatus != CaptureStatus.ACTIVE && recording.captureStatus != CaptureStatus.PAUSED
+            Box {
+                OutlinedButton(enabled = canChangeLanguage, onClick = { languageMenuOpen = true }) {
+                    Text("Language: ${recording.language.displayName}")
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                }
+                DropdownMenu(expanded = languageMenuOpen, onDismissRequest = { languageMenuOpen = false }) {
+                    RecordingLanguage.values().forEach { language ->
+                        DropdownMenuItem(text = { Text(language.displayName) }, onClick = {
+                            languageMenuOpen = false
+                            viewModel.setRecordingLanguage(recording.id, language)
+                        })
+                    }
+                }
+            }
+            Text("Language changes apply the next time you transcribe. Tap Reprocess to update an existing transcript.", style = MaterialTheme.typography.bodySmall)
             
             Text(recording.transcriptionMode?.title ?: "Choose a default transcription mode in Settings", style = MaterialTheme.typography.labelLarge)
             recording.processingError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
